@@ -1,0 +1,3 @@
+[submodule "rosetta-lisp"]
+	path = rosetta-lisp
+	url = https://github.com/yubrot/rosetta-lisp.git
