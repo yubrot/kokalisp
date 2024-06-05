@@ -27,6 +27,16 @@ pub fun test(s : sexp<a>) : bool
     SBool(value) -> value
     _ -> True
 
+pub fun map(s : sexp<a>, f : a -> e b) : e sexp<b>
+  match s
+    SNum(value) -> SNum(value)
+    SSym(value) -> SSym(value)
+    SStr(value) -> SStr(value)
+    SCons(car, cdr) -> SCons(car.map(f), cdr.map(f))
+    SNil -> SNil
+    SBool(value) -> SBool(value)
+    SPure(a) -> SPure(f(a))
+
 pub fun quote(s)
   ["quote".SSym, s].sexp
 

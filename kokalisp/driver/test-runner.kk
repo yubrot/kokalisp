@@ -5,10 +5,12 @@ import kokalisp/support/void
 import kokalisp/support/os
 import kokalisp/sexp
 import kokalisp/sexp/parser
+import kokalisp/vm
 
 pub fun run-tests(src : string) : io ()
+  val vm = vm/new()
   for { read-testcases(src) } fn(tc)
-    match try({ tc.command.run })
+    match try({ tc.command.run(vm) })
       Ok(_) ->
         println("PASS " ++ tc.title)
       Error(e) ->
@@ -28,12 +30,18 @@ type command
   EvalFailure(input : string)
   EvalAll(input : string)
 
-fun command/run(command: command) : pure ()
+fun command/run(command: command, vm : vm) : <exn, stenv> ()
   match command
     ParseSuccess(input, result) ->
       parse-sexp(input).expect-success("Parse", id).expect-equal("Parse", result)
     ParseFailure(input) ->
       parse-sexp(input).expect-failure("Parse")
+    CompileSuccess(input, result) ->
+      val s = parse-sexp(input).expect-success("Parse", id)
+      try { vm.compile(s) }.either.expect-success("Compile", message).expect-equal("Compile", result)
+    CompileFailure(input) ->
+      val s = parse-sexp(input).expect-success("Parse", id)
+      try { vm.compile(s) }.either.expect-failure("Compile")
     _ -> () // TODO
 
 fun parse-sexp(input : string) : div either<string, sexp<void>>
