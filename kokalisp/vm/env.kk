@@ -31,4 +31,3 @@ pub fun set(env : env<a>, k : string, v : a) : stenv maybe<a>
     Nothing ->
       with parent <- maybe(env.parent, Nothing)
       parent.set(k, v)
-

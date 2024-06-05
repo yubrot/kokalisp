@@ -1,10 +1,10 @@
 module kokalisp/support/void
 
-import std/core/undiv
+import std/core/unsafe
 
 pub fun absurd(a : void) : a
-  // this is safe since void has no constructor
-  absurd(pretend-decreasing(a))
+  with unsafe-total
+  throw("void/absurd")
 
 pub fun show(a : void) : string
   absurd(a)

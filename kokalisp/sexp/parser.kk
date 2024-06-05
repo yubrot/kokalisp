@@ -7,6 +7,9 @@ import kokalisp/sexp
 pub fun parse(input : sslice, p: () -> <parse|e> a) : e either<string, a>
   parse-eof(input) { lead(amb, p) }.either
 
+pub fun program() : <parse|_> list<sexp<a>>
+  many(sexp)
+
 pub fun sexp() : <parse|_> sexp<a>
   fun list-inner()
     optional(SNil)

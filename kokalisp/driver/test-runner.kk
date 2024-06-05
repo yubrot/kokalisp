@@ -1,6 +1,7 @@
 module kokalisp/driver/test-runner
 
 import kokalisp/support/yield
+import kokalisp/support/raise
 import kokalisp/support/void
 import kokalisp/support/os
 import kokalisp/sexp
@@ -30,35 +31,49 @@ type command
   EvalFailure(input : string)
   EvalAll(input : string)
 
-fun command/run(command: command, vm : vm) : <exn, stenv> ()
+// XXX: This noinline is required to avoid strange compiler bug
+noinline fun command/run(command: command, vm : vm) : io ()
   match command
     ParseSuccess(input, result) ->
-      parse-sexp(input).expect-success("Parse", id).expect-equal("Parse", result)
+      parse-sexp(input).expect-success("Parse", id).show.expect-equal("Parse", result)
     ParseFailure(input) ->
       parse-sexp(input).expect-failure("Parse")
     CompileSuccess(input, result) ->
-      val s = parse-sexp(input).expect-success("Parse", id)
-      try { vm.compile(s) }.either.expect-success("Compile", message).expect-equal("Compile", result)
+      parse-sexp(input).expect-success("Parse", id).sexp-compile(vm).expect-success("Compile", snd).show.expect-equal("Compile", result)
     CompileFailure(input) ->
-      val s = parse-sexp(input).expect-success("Parse", id)
-      try { vm.compile(s) }.either.expect-failure("Compile")
-    _ -> () // TODO
+      parse-sexp(input).expect-success("Parse", id).sexp-compile(vm).expect-failure("Compile")
+    EvalSuccess(input, result) ->
+      parse-sexp(input).expect-success("Parse", id).sexp-eval(vm).expect-success("Eval", show).show.expect-equal("Eval", result)
+    EvalFailure(input) ->
+      parse-sexp(input).expect-success("Parse", id).sexp-eval(vm).expect-failure("Eval")
+    EvalAll(input) ->
+      parse-program(input).expect-success("Parse", id).foreach fn(s)
+        s.sexp-eval(vm).expect-success("Eval", show).ignore
 
-fun parse-sexp(input : string) : div either<string, sexp<void>>
+fun parse-sexp(input : string) : _ either<string, sexp<void>>
   parse(input.slice, sexp)
 
-fun expect-success(result : either<a, b>, step : string, msg : a -> string) : exn b
+fun parse-program(input : string) : _ either<string, list<sexp<void>>>
+  parse(input.slice, program)
+
+fun sexp-compile(s : sexp<void>, vm : vm) : _ either<(sexp<void>, string), code>
+  either { vm.compile(s) }
+
+fun sexp-eval(s : sexp<void>, vm : vm) : _ either<eval-error, value>
+  either { vm.eval(s.map(absurd)) }
+
+fun expect-success(result : either<a, b>, step : string, msg : a -> _ string) : _ b
   match result
     Right(a) -> a
     Left(e) -> throw(step ++ " failed: " ++ msg(e))
 
-fun expect-failure(result : either<a, b>, step : string, ?show : b -> string) : exn ()
+fun expect-failure(result : either<a, b>, step : string, ?show : b -> _ string) : _ ()
   match result
     Right(a) -> throw(step ++ " succeed: " ++ a.show)
     Left(_) -> ()
 
-fun expect-equal(result : a, step : string, expect : string, ?show : a -> string) : exn ()
-  val actual = result.show.trim
+fun expect-equal(result : string, step : string, expect : string) : _ ()
+  val actual = result.trim
   if actual != expect.trim then
     throw(step ++ " result differs: " ++ actual)
 
