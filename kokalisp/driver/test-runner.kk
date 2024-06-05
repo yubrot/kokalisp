@@ -2,13 +2,18 @@ module kokalisp/driver/test-runner
 
 import kokalisp/support/yield
 import kokalisp/support/void
+import kokalisp/support/os
 import kokalisp/sexp
 import kokalisp/sexp/parser
 
 pub fun run-tests(src : string) : io ()
   for { read-testcases(src) } fn(tc)
-    println(tc.title)
-    tc.command.run
+    match try({ tc.command.run })
+      Ok(_) ->
+        println("PASS " ++ tc.title)
+      Error(e) ->
+        println("FAIL " ++ tc.title ++ " " ++ e.message)
+        exit(1)
 
 value struct testcase
   title : string
