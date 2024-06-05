@@ -1,10 +1,14 @@
 module kokalisp/driver/test-runner
 
 import kokalisp/support/yield
+import kokalisp/support/void
+import kokalisp/sexp
+import kokalisp/sexp/parser
 
 pub fun run-tests(src : string) : io ()
   for { read-testcases(src) } fn(tc)
-    println(tc.show)
+    println(tc.title)
+    tc.command.run
 
 value struct testcase
   title : string
@@ -19,16 +23,31 @@ type command
   EvalFailure(input : string)
   EvalAll(input : string)
 
-fun show(c : testcase) : string
-  c.title ++ ": " ++ (match c.command
-    ParseSuccess(_, _) -> "ParseSuccess"
-    ParseFailure(_) -> "ParseFailure"
-    CompileSuccess(_, _) -> "CompileSuccess"
-    CompileFailure(_) -> "CompileFailure"
-    EvalSuccess(_, _) -> "EvalSuccess"
-    EvalFailure(_) -> "EvalFailure"
-    EvalAll(_) -> "EvalAll"
-  )
+fun command/run(command: command) : pure ()
+  match command
+    ParseSuccess(input, result) ->
+      parse-sexp(input).expect-success("Parse", id).expect-equal("Parse", result)
+    ParseFailure(input) ->
+      parse-sexp(input).expect-failure("Parse")
+    _ -> () // TODO
+
+fun parse-sexp(input : string) : div either<string, sexp<void>>
+  parse(input.slice, sexp)
+
+fun expect-success(result : either<a, b>, step : string, msg : a -> string) : exn b
+  match result
+    Right(a) -> a
+    Left(e) -> throw(step ++ " failed: " ++ msg(e))
+
+fun expect-failure(result : either<a, b>, step : string, ?show : b -> string) : exn ()
+  match result
+    Right(a) -> throw(step ++ " succeed: " ++ a.show)
+    Left(_) -> ()
+
+fun expect-equal(result : a, step : string, expect : string, ?show : a -> string) : exn ()
+  val actual = result.show.trim
+  if actual != expect.trim then
+    throw(step ++ " result differs: " ++ actual)
 
 fun read-testcases(src : string) : <pure, yield<testcase>> ()
   var stream := src.lines
