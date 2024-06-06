@@ -62,7 +62,7 @@ fun show-div(s : sexp<a>, ?pure/show : a -> e string) : <div | e> string
     SCons(SSym("unquote-splicing"), SCons(s, SNil)) -> ",@" ++ s.show-div
     SNum(value) -> value.show
     SSym(value) -> value
-    SStr(value) -> value.show
+    SStr(value) -> "\"" ++ value.kokalisp-escape ++ "\""
     SCons(car, cdr) -> "(" ++ car.show-div ++ cdr.show-cdr ++ ")"
     SNil -> "()"
     SBool(True) -> "#t"
@@ -74,3 +74,25 @@ fun show-cdr(s : sexp<a>, ?pure/show : a -> e string) : <div | e> string
     SNil -> ""
     SCons(car, cdr) -> " " ++ car.show-div ++ cdr.show-cdr
     _ -> " . " ++ s.show-div
+
+pub fun kokalisp-escape(s : string) : string
+  fun escape-char(c : char)
+    match c
+      '\\' -> "\\\\"
+      '\t' -> "\\t"
+      '\n' -> "\\n"
+      '"' -> "\\\""
+      _ -> c.string
+  s.list.map(escape-char).join
+
+pub fun kokalisp-unescape(s : string) : exn string
+  fun cat((acc, escape) : (string, bool), c : char)
+    match (escape, c)
+      (False, '\\') -> (acc, True)
+      (False, _) -> (acc ++ c.string, False)
+      (True, '\\') -> (acc ++ "\\", False)
+      (True, 't') -> (acc ++ "\t", False)
+      (True, 'n') -> (acc ++ "\n", False)
+      (True, '"') -> (acc ++ "\"", False)
+      (True, _) -> throw("Unknown escape sequence: \\" ++ c.string)
+  s.list.foldl(("", False), cat).fst

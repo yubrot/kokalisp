@@ -10,7 +10,7 @@ import kokalisp/vm
 import kokalisp/driver/builtins
 
 pub fun run-tests(src : string) : io ()
-  val vm = vm/new(builtins/list)
+  val vm = vm/new(Cons(("args", builtin/args([])), builtins/list))
   for { read-testcases(src) } fn(tc)
     match try({ tc.command.run(vm) })
       Ok(_) ->

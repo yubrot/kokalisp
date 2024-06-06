@@ -152,8 +152,21 @@ fun exec/apply(e : exec, f : value, args : list<value>) : eval ()
           fun gensym() "#sym." ++ e.vm.next-id.show
           fun push(value) e.push(value)
           fun apply(f', args') e.apply(f', args')
+          fun apply-never(f', args') e.apply-never(f', args')
+          fun capture-cont() SPure(NCont(Cont(!e.stack, !e.env, !e.code, !e.dump)))
+          fun eval(v) either({ raise/map(eval-error/show) { e.vm.eval(v) } })
+          fun macroexpand(v, recurse) either({ raise/map(eval-error/show) { e.vm.macroexpand(v, recurse) } })
         impl(args)
       Nothing -> raise(InternalError("Unknown builtin: " ++ id.show))
+    SPure(NCont(cont)) ->
+      set(e.stack, cont.stack)
+      set(e.env, cont.env)
+      set(e.code, cont.code)
+      set(e.dump, cont.dump)
+      match args
+        [] -> e.push(SNil)
+        [x] -> e.push(x)
+        _ -> raise(ExecError("Multiple values are not implemented"))
     _ -> raise(ExecError("Cannot call: " ++ f.show))
 
 fun exec/apply-never(e : exec, f : value, args : list<value>) : eval ()

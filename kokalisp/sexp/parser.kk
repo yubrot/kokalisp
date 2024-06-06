@@ -49,16 +49,12 @@ fun symbol() : parse string
 
 fun string() : parse string
   fun chars() chars-are("chars", fn(c) c != '"' && c != '\\').string
-  fun escape-seq()
-    char('\\')
-    match one-of("\\tn\"")
-      '\\' -> "\\"
-      't' -> "\t"
-      'n' -> "\n"
-      '"' -> "\""
-      _ -> fail("unreachable")
+  fun escape-seq() char('\\').string ++ one-of("\\tn\"").string
   between { char('"') } { char('"') }
-    many { choose([chars, escape-seq]) }.join("")
+    val s = many { choose([chars, escape-seq]) }.join("")
+    match try({ s.kokalisp-unescape })
+      Ok(unescaped-s) -> unescaped-s
+      Error(e) -> fail(e.message)
 
 fun term(s: string) : parse ()
   lex { pstring(s) }.ignore

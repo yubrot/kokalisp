@@ -17,15 +17,21 @@ pub type native
   // It seems that recursive types with aliases introduce a problem?
   // https://github.com/koka-lang/koka/discussions/280
   NBuiltin(id : builtin-id)
+  NCont(cont : cont)
   NMacro(env : env<value>, pattern : pattern, code : code)
   NSyntax(impl : syntax)
+  NVec(items : vector<ref<global, value>>)
 
-pub fun native/show(n : native) : string
+pub fun native/show(n : native) : <div, st<global>> string
   match n
     NFun(_, _, _) -> "<fun>"
     NBuiltin(_) -> "<builtin>"
+    NCont(_) -> "<builtin>" // for Rosetta-Lisp compatibility
     NMacro(_, _, _) -> "<macro>"
     NSyntax(_) -> "<syntax>"
+    NVec(items) ->
+      val s = SCons(SSym("vec"), items.list.foldr(SNil) fn(a, b) SCons(!a, b))
+      s.show
 
 abstract value struct builtin-id
   index : int
@@ -33,12 +39,22 @@ abstract value struct builtin-id
 pub fun builtin-id/show(id : builtin-id) : string
   "#" ++ id.index.show
 
+pub struct cont
+  stack : list<value>
+  env : env<value>
+  code : code
+  dump : list<(env<value>, code)>
+
 pub alias builtin = list<value> -> <builtin-op, io> ()
 
 pub effect builtin-op
   fun gensym() : string
   fun push(v : value) : ()
   fun apply(f : value, args : list<value>) : ()
+  fun apply-never(f : value, args : list<value>) : ()
+  fun capture-cont() : value
+  fun eval(v : value) : either<string, value>
+  fun macroexpand(v : value, recurse : bool) : either<string, value>
 
 // Registry of indirect references from builtin-id to builtin
 pub value struct builtin-registry
