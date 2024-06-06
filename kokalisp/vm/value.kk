@@ -9,13 +9,49 @@ import kokalisp/vm/syntax
 pub alias value = sexp<native>
 
 pub type native
-  // Use env<sexp<native>> instead of env<value> (compiler bug?)
-  NFun(env : env<sexp<native>>, pattern : pattern, code : code)
-  NMacro(env : env<sexp<native>>, pattern : pattern, code : code)
+  NFun(env : env<value>, pattern : pattern, code : code)
+  // To avoid using [recursive types](https://koka-lang.github.io/koka/doc/book.html#sec-inductive-co-inductive-and-recursive-types),
+  // we don't use `builtin` directly, but use indirect references for now.
+  // I'm encountering type errors when using recursive types, but I'm not sure if
+  // it's a Koka's implementation bug, limitation, or a problem with the program.
+  // It seems that recursive types with aliases introduce a problem?
+  // https://github.com/koka-lang/koka/discussions/280
+  NBuiltin(id : builtin-id)
+  NMacro(env : env<value>, pattern : pattern, code : code)
   NSyntax(impl : syntax)
 
 pub fun native/show(n : native) : string
   match n
     NFun(_, _, _) -> "<fun>"
+    NBuiltin(_) -> "<builtin>"
     NMacro(_, _, _) -> "<macro>"
     NSyntax(_) -> "<syntax>"
+
+abstract value struct builtin-id
+  index : int
+
+pub fun builtin-id/show(id : builtin-id) : string
+  "#" ++ id.index.show
+
+pub alias builtin = list<value> -> <builtin-op, io> ()
+
+pub effect builtin-op
+  fun gensym() : string
+  fun push(v : value) : ()
+  fun apply(f : value, args : list<value>) : ()
+
+// Registry of indirect references from builtin-id to builtin
+pub value struct builtin-registry
+  implementations : vector<builtin>
+  symbols : list<string>
+
+pub fun builtin-registry(list : list<(string, builtin)>) : builtin-registry
+  Builtin-registry(list.map(snd).vector, list.map(fst))
+
+pub fun builtin-registry/resolve(reg : builtin-registry, b : string) : maybe<builtin-id>
+  match reg.symbols.index-of(fn(sym) sym == b)
+    -1 -> Nothing
+    index -> Just(Builtin-id(index))
+
+pub fun builtin-registry/implementation(reg : builtin-registry, id : builtin-id) : maybe<builtin>
+  reg.implementations.at(id.index)

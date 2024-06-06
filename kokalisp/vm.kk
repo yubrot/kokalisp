@@ -12,11 +12,13 @@ pub import kokalisp/vm/value
 // Root of Kokalisp language processor state
 pub value struct vm
   toplevel : env<value>
+  id-gen : ref<global, int>
+  builtins : builtin-registry
 
-pub fun new() : stenv vm
+pub fun new(builtins : list<(string, builtin)>) : stenv vm
   val toplevel = env/empty(Nothing)
   syntax/list.foreach fn((name, syn)) toplevel.define(name, SPure(NSyntax(syn)))
-  Vm(toplevel)
+  Vm(toplevel, ref(0), builtin-registry(builtins))
 
 pub fun refer(vm : vm, s : sexp<a>) : stenv maybe<value>
   match s
@@ -36,6 +38,10 @@ pub fun compile(vm : vm, s : sexp<a>) : <raise<(sexp<a>, string)>, stenv> code
         _ -> vm.compile(f) ++ args.flatmap(fn(arg) vm.compile(arg)) ++ [App(args.length)]
       _ -> raise((s, "Improper list"))
     _ -> [Ldc(s.map fn(a) raise((s, "Found non-S-expression")))]
+
+fun next-id(vm : vm) : stenv int
+  set(vm.id-gen, !vm.id-gen + 1)
+  !vm.id-gen
 
 pub fun eval(vm : vm, value : value) : eval value
   val macroexpanded-value = vm.macroexpand(value)
@@ -110,7 +116,9 @@ fun exec/inst(e : exec, i : inst) : eval ()
       Nothing -> raise(ExecError("Undefined variable: " ++ k))
     Ldf(pattern, code) -> e.push(SPure(NFun(!e.env, pattern, code)))
     Ldm(pattern, code) -> e.push(SPure(NMacro(!e.env, pattern, code)))
-    Ldb(_) -> raise(InternalError("Not implemented: ldb"))
+    Ldb(b) -> match e.vm.builtins.resolve(b)
+      Just(id) -> e.push(SPure(NBuiltin(id)))
+      Nothing -> raise(ExecError("Unsupported builtin: " ++ b))
     Sel(a, b) ->
       val branch-env = env/empty(Just(!e.env))
       val branch-code = if e.pop.test then a else b
@@ -137,6 +145,15 @@ fun exec/apply(e : exec, f : value, args : list<value>) : eval ()
       val new-env = env/empty(Just(fenv))
       bind-args(new-env, fpat, args)
       e.enter(new-env, fbody)
+    SPure(NBuiltin(id)) -> match e.vm.builtins.implementation(id)
+      Just(impl) ->
+        with final ctl throw-exn(exn) raise(ExecError(exn.show))
+        with handler
+          fun gensym() "#sym." ++ e.vm.next-id.show
+          fun push(value) e.push(value)
+          fun apply(f', args') e.apply(f', args')
+        impl(args)
+      Nothing -> raise(InternalError("Unknown builtin: " ++ id.show))
     _ -> raise(ExecError("Cannot call: " ++ f.show))
 
 fun exec/apply-never(e : exec, f : value, args : list<value>) : eval ()
