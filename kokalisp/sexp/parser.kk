@@ -4,13 +4,37 @@ import std/text/parse
 import std/num/float64
 import kokalisp/sexp
 
-pub fun parse(input : sslice, p: () -> <parse|e> a) : e either<string, a>
-  parse-eof(input) { lead(amb, p) }.either
+pub fun parse-sexp(input : string) : div either<string, sexp<a>>
+  parse-all(input.slice, sexp).either
 
-pub fun program() : <parse|_> list<sexp<a>>
+pub fun parse-program(input : string) : div either<string, list<sexp<a>>>
+  // Unfortunately, Koka compiler v3.1.2 results in a segmentation fault if the
+  // parser input is too large. Therefore, we split the input in an ad hoc manner.
+  fun split-input-ad-hoc(input-lines : list<string>, acc : string)
+    match input-lines
+      Cons(line, lines) | line.starts-with("(").is-just ->
+        Cons(acc, split-input-ad-hoc(lines, line ++ "\n"))
+      Cons(line, lines) ->
+        split-input-ad-hoc(lines, acc ++ line ++ "\n")
+      Nil ->
+        [acc]
+
+  with handler
+    return(r) Right(r)
+    final ctl throw-exn(e) Left(e.message)
+
+  split-input-ad-hoc(input.split("\n"), "").flatmap fn(input-part)
+    match parse-all(input-part.slice, program)
+      ParseOk(ss, _) -> ss
+      ParseError(e, _) -> throw(e)
+
+fun parse-all(input : sslice, p: () -> <parse|e> a) : e parse-error<a>
+  parse-eof(input) { lead(amb, p) }
+
+fun program() : <parse | _> list<sexp<a>>
   many(sexp)
 
-pub fun sexp() : <parse|_> sexp<a>
+fun sexp() : <parse | _> sexp<a>
   fun list-inner()
     optional(SNil)
       val init = many1(sexp)
